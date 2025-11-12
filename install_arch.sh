@@ -58,7 +58,7 @@ echo -e "\n${YELLOW}[5/12] Установка базовой системы...${
 pacstrap /mnt base base-devel linux linux-firmware linux-headers nano vim bash-completion \
 grub efibootmgr ttf-ubuntu-font-family ttf-hack ttf-dejavu ttf-opensans gdm gnome nvidia \
 networkmanager sudo telegram-desktop chromium bluez bluez-utils gnome-bluetooth \
-gnome-bluetooth-3.0 sof-firmware steam gnome-tweaks zram-generator
+gnome-bluetooth-3.0 sof-firmware gnome-tweaks zram-generator
 
 genfstab -U /mnt >> /mnt/etc/fstab
 
@@ -95,7 +95,7 @@ swap-priority = 100
 ZRAMCONF
 
 grub-install $DISK
-sed -i 's/quiet//g' /etc/default/grub
+sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/ s/quiet *//g' /etc/default/grub
 grub-mkconfig -o /boot/grub/grub.cfg
 
 EOF
