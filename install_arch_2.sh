@@ -107,5 +107,8 @@ EOF
 arch-chroot /mnt bash /root/chroot-setup.sh
 rm /mnt/root/chroot-setup.sh
 
-echo -e "\n${GREEN}[✔] Installation completed successfully!${RESET}"
-echo -e "You can now run: ${YELLOW}reboot${RESET}"
+echo -e "\n${YELLOW}[11/12] Unmounting partitions...${RESET}"
+umount -R /mnt || echo -e "${RED}Warning: failed to unmount some partitions.${RESET}"
+
+echo -e "\n${GREEN}[12/12] Installation completed successfully!${RESET}"
+echo -e "You can now safely reboot your system with: ${YELLOW}reboot${RESET}"
