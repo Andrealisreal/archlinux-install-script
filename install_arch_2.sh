@@ -66,7 +66,7 @@ echo -e "\n${YELLOW}[5/12] Installing base system...${RESET}"
 pacstrap /mnt base base-devel linux linux-firmware linux-headers nano vim bash-completion \
 grub efibootmgr ttf-ubuntu-font-family ttf-hack ttf-dejavu ttf-opensans gdm gnome nvidia \
 networkmanager sudo telegram-desktop chromium bluez bluez-utils gnome-bluetooth \
-gnome-bluetooth-3.0 sof-firmware gnome-tweaks zram-generator reflector
+gnome-bluetooth-3.0 sof-firmware gnome-tweaks zram-generator reflector git fastfetch btop
 
 genfstab -U /mnt >> /mnt/etc/fstab
 
