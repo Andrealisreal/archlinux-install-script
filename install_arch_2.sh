@@ -30,6 +30,14 @@ TIMEZONE="Europe/Saratov"
 LOCALE="en_US.UTF-8"
 SWAP_SIZE="ram / 2"
 
+echo -e "\n${YELLOW}[0/12] Initializing pacman keyring...${RESET}"
+mount -o remount,rw / || true
+if [ ! -d /etc/pacman.d/gnupg ]; then
+    mkdir -p /etc/pacman.d/gnupg
+fi
+pacman-key --init
+pacman-key --populate archlinux
+
 echo -e "\n${YELLOW}[2/12] Setting timezone...${RESET}"
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 hwclock --systohc
