@@ -101,13 +101,14 @@ parted -s "$DISK" set 1 esp on
 parted -s "$DISK" mkpart primary ext4 512MiB 35%
 parted -s "$DISK" mkpart primary ext4 35% 100%
 
-# === 🔧 ВАЖНО: Определяем префикс разделов (p для NVMe, пусто для SATA) ===
+# === 🔧 ВАЖНО: Определяем префикс разделов ===
 if [[ "$DISK" == /dev/nvme* ]]; then
     PART_PREFIX="p"
 else
     PART_PREFIX=""
 fi
 echo -e "${GREEN}✓ Префикс разделов: '${PART_PREFIX}' (NVMe: 'p', SATA: '')${RESET}"
+echo -e "${GREEN}✓ DISK=$DISK, будет использовать: ${DISK}${PART_PREFIX}1${RESET}"
 
 # Форматирование
 mkfs.vfat "${DISK}${PART_PREFIX}1"
@@ -144,8 +145,8 @@ genfstab -U /mnt >> /mnt/etc/fstab
 echo -e "${GREEN}✓ Базовая система установлена${RESET}"
 
 # === [7/10] НАСТРОЙКА В CHROOT ===
-echo -e "\n${YELLOW}[7/10] Настройка системы (chroot)...${RESET}"
-confirm "Будут настроены: hostname, locale, пользователь, сервисы, GRUB"
+echo -e "\n${YELLOW}[7/10] Настройка системы (chroot)...${RESET}"confirm "Будут настроены: hostname, locale, пользователь, сервисы, GRUB"
+
 cat <<CHROOT_EOF > /mnt/root/chroot-setup.sh
 set -e
 echo "$HOSTNAME" > /etc/hostname
@@ -186,7 +187,6 @@ echo -e "${GREEN}✓ Система настроена${RESET}"
 echo -e "\n${YELLOW}[8/10] Создание ~/.xinitrc для $USERNAME...${RESET}"
 confirm "Создать файл /home/$USERNAME/.xinitrc для запуска Cinnamon?"
 
-# 🔧 Исправлен heredoc: перенос строки перед XINITRC
 cat <<XINITRC > "/mnt/home/$USERNAME/.xinitrc"
 #!/bin/bash
 exec cinnamon-session
