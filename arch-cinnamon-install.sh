@@ -9,7 +9,6 @@ BLUE="\e[34m"
 RESET="\e[0m"
 
 # === ПОДДЕРЖКА РУССКОГО В LIVE CD ===
-# Пытаемся включить шрифт с кириллицей. Если не выйдет — установка не прервётся.
 if command -v setfont &>/dev/null; then
     setfont ter-v16b 2>/dev/null || setfont LatGrkCyr-8x16 2>/dev/null || true
 fi
@@ -47,14 +46,13 @@ echo -e "${GREEN}✓ Выбран диск: $DISK${RESET}"
 echo -e "${YELLOW}Проверка подключения к интернету...${RESET}"
 if ! ping -c 1 archlinux.org &>/dev/null; then
     echo -e "${RED}❌ Ошибка: Нет подключения к интернету!${RESET}"
-    echo -e "Подключите кабель или настройте WiFi через 'iwctl'"    exit 1
-fi
+    echo -e "Подключите кабель или настройте WiFi через 'iwctl'"
+    exit 1fi
 echo -e "${GREEN}✓ Интернет работает${RESET}"
 
 # === [2/10] ИМЯ ПОЛЬЗОВАТЕЛЯ ===
 read -rp "Введите имя пользователя (латиницей, без пробелов): " USERNAME
 USERNAME="${USERNAME:-andreal}"
-# Проверка на валидность имени
 if [[ ! "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
     echo -e "${RED}❌ Имя пользователя должно начинаться с буквы и содержать только латиницу/цифры.${RESET}"
     exit 1
@@ -96,23 +94,31 @@ echo -e "  ${GREEN}p2${RESET}: 512 MiB → 35%     (~33%)   → / (систем�
 echo -e "  ${GREEN}p3${RESET}: 35% → 100%        (~65%)   → /home (файлы + ассеты)"
 confirm "⚠️  ВСЕ ДАННЫЕ НА ДИСКЕ $DISK БУДУТ УДАЛЕНЫ! Продолжить?"
 
-# Очистка и разметкаsgdisk --zap-all "$DISK"
-parted -s "$DISK" mklabel gpt
-parted -s "$DISK" mkpart ESP fat32 1MiB 512MiB
+# Очистка и разметка
+sgdisk --zap-all "$DISK"
+parted -s "$DISK" mklabel gptparted -s "$DISK" mkpart ESP fat32 1MiB 512MiB
 parted -s "$DISK" set 1 esp on
 parted -s "$DISK" mkpart primary ext4 512MiB 35%
 parted -s "$DISK" mkpart primary ext4 35% 100%
 
+# === 🔧 ВАЖНО: Определяем префикс разделов (p для NVMe, пусто для SATA) ===
+if [[ "$DISK" == /dev/nvme* ]]; then
+    PART_PREFIX="p"
+else
+    PART_PREFIX=""
+fi
+echo -e "${GREEN}✓ Префикс разделов: '${PART_PREFIX}' (NVMe: 'p', SATA: '')${RESET}"
+
 # Форматирование
-mkfs.vfat "${DISK}p1"
-mkfs.ext4 "${DISK}p2"
-mkfs.ext4 "${DISK}p3"
+mkfs.vfat "${DISK}${PART_PREFIX}1"
+mkfs.ext4 "${DISK}${PART_PREFIX}2"
+mkfs.ext4 "${DISK}${PART_PREFIX}3"
 
 # Монтирование
-mount "${DISK}p2" /mnt
+mount "${DISK}${PART_PREFIX}2" /mnt
 mkdir -p /mnt/boot/efi /mnt/home
-mount "${DISK}p1" /mnt/boot/efi
-mount "${DISK}p3" /mnt/home
+mount "${DISK}${PART_PREFIX}1" /mnt/boot/efi
+mount "${DISK}${PART_PREFIX}3" /mnt/home
 echo -e "${GREEN}✓ Разделы созданы и смонтированы${RESET}"
 
 # === [6/10] УСТАНОВКА ПАКЕТОВ (PACSTRAP) ===
@@ -134,56 +140,44 @@ pacstrap /mnt \
     bluez bluez-utils blueman \
     telegram-desktop chromium discord webkit2gtk
 
-# Генерация fstab
 genfstab -U /mnt >> /mnt/etc/fstab
 echo -e "${GREEN}✓ Базовая система установлена${RESET}"
 
 # === [7/10] НАСТРОЙКА В CHROOT ===
 echo -e "\n${YELLOW}[7/10] Настройка системы (chroot)...${RESET}"
 confirm "Будут настроены: hostname, locale, пользователь, сервисы, GRUB"
-
-# Создаём скрипт настройки внутри новой системы.
-# ВНИМАНИЕ: heredoc БЕЗ кавычек ('CHROOT_EOF'), чтобы переменные bash раскрылись ЗДЕСЬ.
 cat <<CHROOT_EOF > /mnt/root/chroot-setup.sh
 set -e
-# Основные настройки
 echo "$HOSTNAME" > /etc/hostname
 ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
 hwclock --systohc
 
-# Локаль
 echo "LANG=$LOCALE_MAIN" > /etc/locale.conf
 sed -i 's/^#\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
 sed -i 's/^#\(ru_RU.UTF-8 UTF-8\)/\1/' /etc/locale.gen
 locale-gen
 
-# Сервисы
 systemctl enable NetworkManager
 systemctl enable bluetooth.service
 systemctl enable lightdm
 
-# Пользователь
 useradd -m -G wheel,audio,video,input "$USERNAME"
 echo "Установите пароль для пользователя $USERNAME:"
 passwd "$USERNAME"
 echo "Установите пароль для root:"
 passwd root
 
-# Sudo (безопасный способ через sudoers.d)
 echo "$USERNAME ALL=(ALL:ALL) ALL" > /etc/sudoers.d/$USERNAME
 chmod 440 /etc/sudoers.d/$USERNAME
 
-# ZRAM
 echo -e "[zram0]\nzram-size = $SWAP_SIZE\ncompression-algorithm = zstd\nswap-priority = 100" > /etc/systemd/zram-generator.conf
 
-# GRUB + NVIDIA
 grub-install "$DISK"
 sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/ s/quiet *//g' /etc/default/grub
 sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 nvidia-drm.modeset=1"/' /etc/default/grub
 grub-mkconfig -o /boot/grub/grub.cfg
 CHROOT_EOF
 
-# Запуск chroot с выделением TTY для passwd
 arch-chroot /mnt /bin/bash -c "/root/chroot-setup.sh" < /dev/tty
 rm -f /mnt/root/chroot-setup.sh
 echo -e "${GREEN}✓ Система настроена${RESET}"
@@ -192,13 +186,14 @@ echo -e "${GREEN}✓ Система настроена${RESET}"
 echo -e "\n${YELLOW}[8/10] Создание ~/.xinitrc для $USERNAME...${RESET}"
 confirm "Создать файл /home/$USERNAME/.xinitrc для запуска Cinnamon?"
 
+# 🔧 Исправлен heredoc: перенос строки перед XINITRC
 cat <<XINITRC > "/mnt/home/$USERNAME/.xinitrc"
 #!/bin/bash
-exec cinnamon-sessionXINITRC
+exec cinnamon-session
+XINITRC
 chown "$USERNAME:$USERNAME" "/mnt/home/$USERNAME/.xinitrc"
 chmod +x "/mnt/home/$USERNAME/.xinitrc"
 echo -e "${GREEN}✓ .xinitrc создан${RESET}"
-
 # === [9/10] ЗАВЕРШЕНИЕ ===
 echo -e "\n${YELLOW}[9/10] Размонтирование разделов...${RESET}"
 confirm "Размонтировать /mnt и завершить установку?"
